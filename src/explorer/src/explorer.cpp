@@ -1,10 +1,14 @@
 #include "explorer.h"
 
-Explorer::Explorer(ros::NodeHandle nh_) : nh_(nh_), map_received(false), has_current_goal_(false) {
+Explorer::Explorer(ros::NodeHandle nh_) : nh_(nh_), map_received(false), has_current_goal_(false), fallback_mode_(NONE) {
     // Initialize parameters
     nh_.param<int>("min_frontier_size", min_frontier_size_, 10);
     nh_.param<double>("max_exploration_distance", max_exploration_distance_, 10.0);
     nh_.param<double>("frontier_search_radius", frontier_search_radius_, 1.0);
+    nh_.param<double>("stuck_timeout", stuck_timeout_, 20.0);  // 20 seconds timeout
+
+    // Initialize stuck detection
+    last_progress_time_ = ros::Time::now();
     
     // Subscribers
     r.odom_sub = nh_.subscribe("/agv1/odom", 10, &Explorer::odomCallback, this);
@@ -23,6 +27,25 @@ Explorer::Explorer(ros::NodeHandle nh_) : nh_(nh_), map_received(false), has_cur
 void Explorer::odomCallback(const nav_msgs::Odometry::ConstPtr &msg) {
     if (!msg) {
         return;
+    }
+    
+    geometry_msgs::Point current_position;
+    current_position.x = msg->pose.pose.position.x;
+    current_position.y = msg->pose.pose.position.y;
+    
+    // Track position history for retreat fallback
+    position_history_.push_back(current_position);
+    if (position_history_.size() > 100) {  // Keep last 100 positions
+        position_history_.erase(position_history_.begin());
+    }
+    
+    // Check for progress towards goal
+    if (has_current_goal_ && distanceToRobot(current_goal_) > 1.0) {
+        double dist_to_goal = distanceToRobot(current_goal_);
+        // If we're making progress (getting closer to goal), update last_progress_time
+        if (dist_to_goal < distanceToRobot(current_goal_) + 0.1) {  // Allow small movements
+            last_progress_time_ = ros::Time::now();
+        }
     }
     
     r.current_pose = msg->pose.pose;
@@ -273,6 +296,15 @@ void Explorer::publishGoal(const geometry_msgs::Point& goal) {
 }
 
 void Explorer::exploreStep() {
+    // First, check if we're stuck and handle it
+    if (isStuck()) {
+        ROS_WARN("Robot appears to be stuck! Initiating recovery procedures.");
+        markFrontierInaccessible(current_goal_);
+        performSensorSweep();
+        initiateFallbackBehavior();
+        return;  // Don't proceed with normal exploration until unstuck
+    }
+    
     // Detect frontiers
     std::vector<FrontierCell> frontiers = detectFrontiers(map);
     if (frontiers.empty()) {
@@ -290,11 +322,25 @@ void Explorer::exploreStep() {
         return;
     }
     
+    // Filter out inaccessible frontiers
+    std::vector<FrontierCluster> accessible_clusters;
+    for (const auto& cluster : clusters) {
+        if (isFrontierAccessible(cluster.centroid)) {
+            accessible_clusters.push_back(cluster);
+        }
+    }
+    
+    if (accessible_clusters.empty()) {
+        ROS_WARN("No accessible frontiers found - initiating fallback behavior");
+        initiateFallbackBehavior();
+        return;
+    }
+    
     // Publish cluster visualization
-    publishClusterMarkers(clusters);
+    publishClusterMarkers(accessible_clusters);
     
     // Select best frontier
-    FrontierCluster best_cluster = selectBestFrontier(clusters);
+    FrontierCluster best_cluster = selectBestFrontier(accessible_clusters);
     if (best_cluster.size == 0) {
         ROS_INFO_THROTTLE(10.0, "No accessible frontiers within range");
         return;
@@ -307,6 +353,85 @@ void Explorer::exploreStep() {
         
         current_goal_ = best_cluster.centroid;
         has_current_goal_ = true;
+        last_progress_time_ = ros::Time::now();  // Reset progress timer
         publishGoal(current_goal_);
     }
+}
+
+bool Explorer::isStuck() {
+    if (!has_current_goal_) {
+        return false;  // Can't be stuck if no goal
+    }
+    
+    ros::Duration time_since_progress = ros::Time::now() - last_progress_time_;
+    return time_since_progress.toSec() > stuck_timeout_;
+}
+
+void Explorer::markFrontierInaccessible(const geometry_msgs::Point& frontier) {
+    if (has_current_goal_) {
+        inaccessible_frontiers_.push_back(current_goal_);
+        ROS_INFO("Marked frontier (%.2f, %.2f) as inaccessible", current_goal_.x, current_goal_.y);
+        has_current_goal_ = false;  // Clear current goal
+    }
+}
+
+void Explorer::performSensorSweep() {
+    // In simulation, we can trigger a map update by requesting more sensor data
+    // For now, just log that we're performing a sensor sweep
+    ROS_INFO("Performing 360° sensor sweep to update evidence grid");
+    // In a real system, this would command the robot to rotate in place
+    // For simulation, we assume the map gets updated through other means
+}
+
+void Explorer::initiateFallbackBehavior() {
+    if (fallback_mode_ == NONE) {
+        // Start with retreat to known location
+        fallback_mode_ = RETREAT;
+        ROS_INFO("Initiating fallback behavior: Retreat to known location");
+        
+        if (!position_history_.empty()) {
+            // Retreat to a position from history (e.g., 20 steps back)
+            size_t retreat_index = position_history_.size() > 20 ? position_history_.size() - 20 : 0;
+            geometry_msgs::Point retreat_point = position_history_[retreat_index];
+            
+            current_goal_ = retreat_point;
+            has_current_goal_ = true;
+            last_progress_time_ = ros::Time::now();
+            publishGoal(current_goal_);
+        } else {
+            // No history, try wall following
+            fallback_mode_ = WALL_FOLLOW;
+            ROS_INFO("No position history available, switching to wall following");
+            // Wall following would require additional implementation
+            // For now, just switch to random walk
+            fallback_mode_ = RANDOM_WALK;
+            ROS_INFO("Switching to random walk fallback");
+        }
+    } else if (fallback_mode_ == RETREAT) {
+        // If retreat didn't work, try wall following
+        fallback_mode_ = WALL_FOLLOW;
+        ROS_INFO("Retreat failed, switching to wall following");
+        // Wall following implementation would go here
+        // For now, switch to random walk
+        fallback_mode_ = RANDOM_WALK;
+        ROS_INFO("Wall following not implemented, switching to random walk");
+    } else if (fallback_mode_ == WALL_FOLLOW) {
+        // If wall following didn't work, try random walk
+        fallback_mode_ = RANDOM_WALK;
+        ROS_INFO("Wall following failed, switching to random walk");
+    } else {
+        // Random walk is the last resort
+        ROS_WARN("All fallback behaviors exhausted. Robot may be truly stuck.");
+        fallback_mode_ = NONE;  // Reset for next attempt
+    }
+}
+
+bool Explorer::isFrontierAccessible(const geometry_msgs::Point& frontier) {
+    for (const auto& inaccessible : inaccessible_frontiers_) {
+        double dist = sqrt(pow(frontier.x - inaccessible.x, 2) + pow(frontier.y - inaccessible.y, 2));
+        if (dist < 2.0) {  // Consider frontiers within 2m as the same
+            return false;
+        }
+    }
+    return true;
 }

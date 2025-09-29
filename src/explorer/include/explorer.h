@@ -70,6 +70,14 @@ private:
     geometry_msgs::Point current_goal_;
     bool has_current_goal_;
     
+    // Stuck detection variables
+    ros::Time last_progress_time_;
+    double stuck_timeout_;
+    std::vector<geometry_msgs::Point> inaccessible_frontiers_;
+    enum FallbackMode { NONE, RETREAT, WALL_FOLLOW, RANDOM_WALK };
+    FallbackMode fallback_mode_;
+    std::vector<geometry_msgs::Point> position_history_;
+    
     // Callback functions
     void odomCallback(const nav_msgs::Odometry::ConstPtr &msg);
     void mapCallback(const nav_msgs::OccupancyGrid::ConstPtr &msg);
@@ -94,6 +102,13 @@ private:
     
     // Goal publishing
     void publishGoal(const geometry_msgs::Point& goal);
+    
+    // Stuck detection and handling methods
+    bool isStuck();
+    void markFrontierInaccessible(const geometry_msgs::Point& frontier);
+    void performSensorSweep();
+    void initiateFallbackBehavior();
+    bool isFrontierAccessible(const geometry_msgs::Point& frontier);
     
     // Main exploration logic
     void exploreStep();

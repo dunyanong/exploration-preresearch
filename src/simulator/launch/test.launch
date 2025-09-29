@@ -38,7 +38,7 @@
 
     <node name="explorer_node" pkg="explorer" type="explorer_node" output="screen" >
       <param name="min_frontier_size" value="3" />
-      <param name="max_exploration_distance" value="15.0" />
+      <param name="max_exploration_distance" value="30.0" />
       <param name="frontier_search_radius" value="1.5" />
     </node>
     
