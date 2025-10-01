@@ -10,11 +10,12 @@
 #include <vector>
 #include <queue>
 #include <cmath>
+#include <ctime>
+#include <cstdlib>
 
-// Frontier exploration structures
 struct FrontierCell {
-    int x, y;          // Grid coordinates
-    double world_x, world_y;  // World coordinates
+    int x, y;
+    double world_x, world_y; 
     
     FrontierCell(int x_, int y_, double wx, double wy) : x(x_), y(y_), world_x(wx), world_y(wy) {}
 };
@@ -32,13 +33,6 @@ struct Robot {
   std::string name;
   ros::Subscriber odom_sub; 
   geometry_msgs::Pose current_pose;
-  ros::Subscriber path_sub;
-  ros::Publisher cloud_pub;
-  ros::Publisher local_path_pub;
-  nav_msgs::Path a_star_path;
-  ros::Publisher adjust_pub;
-  int target_index;
-  std::vector<geometry_msgs::Point> discrete_path;
 };
 
 
@@ -55,34 +49,30 @@ private:
     nav_msgs::OccupancyGrid map;
     bool map_received;
     
-    // Publishers
     ros::Publisher goal_pub;
     ros::Publisher frontier_marker_pub;
     ros::Publisher cluster_marker_pub;
     
-    // Parameters
-    int min_frontier_size_;
-    double max_exploration_distance_;
-    double frontier_search_radius_;
-    
+    int min_frontier_size;
+    double max_exploration_distance;
+    double frontier_search_radius;
+
     // Frontier exploration variables
     std::vector<FrontierCluster> frontier_clusters_;
-    geometry_msgs::Point current_goal_;
-    bool has_current_goal_;
+    geometry_msgs::Point current_goal;
+    bool has_current_goal;
     
-    // Stuck detection variables
-    ros::Time last_progress_time_;
-    double stuck_timeout_;
-    std::vector<geometry_msgs::Point> inaccessible_frontiers_;
-    enum FallbackMode { NONE, RETREAT, WALL_FOLLOW, RANDOM_WALK };
-    FallbackMode fallback_mode_;
-    std::vector<geometry_msgs::Point> position_history_;
+    double stuck_timeout;
+    ros::Time last_progress_time;
+    std::vector<geometry_msgs::Point> inaccessible_frontiers;
+    enum FallbackMode { NONE, RETREAT, RANDOM_WALK };
+    FallbackMode fallback_mode;
+    std::vector<geometry_msgs::Point> position_history;
     
-    // Callback functions
     void odomCallback(const nav_msgs::Odometry::ConstPtr &msg);
     void mapCallback(const nav_msgs::OccupancyGrid::ConstPtr &msg);
     
-    // Frontier detection methods
+    // Frontier detection stuffs
     std::vector<FrontierCell> detectFrontiers(const nav_msgs::OccupancyGrid& grid);
     std::vector<FrontierCluster> clusterFrontiers(const std::vector<FrontierCell>& frontiers);
     FrontierCluster selectBestFrontier(const std::vector<FrontierCluster>& clusters);
@@ -106,9 +96,16 @@ private:
     // Stuck detection and handling methods
     bool isStuck();
     void markFrontierInaccessible(const geometry_msgs::Point& frontier);
-    void performSensorSweep();
     void initiateFallbackBehavior();
     bool isFrontierAccessible(const geometry_msgs::Point& frontier);
+    void retreatToHistory();
+    void performRandomWalk();
+    
+    // Goal validation and setting
+    bool setNewGoal(const geometry_msgs::Point& goal);
+    bool isGoalReachable(const geometry_msgs::Point& goal);
+    bool isPointInMap(const geometry_msgs::Point& point);
+    double distanceBetween(const geometry_msgs::Point& p1, const geometry_msgs::Point& p2);
     
     // Main exploration logic
     void exploreStep();
