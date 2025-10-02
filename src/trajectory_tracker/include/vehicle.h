@@ -41,8 +41,8 @@ struct Vehicle {
 
   Vehicle() = default;
   Vehicle(const std::string &name_)
-      : name(name_), kp_linear(10.0), kp_angular(3.5), kp_angular_small(1.0),
-        tolerance(0.5), max_linear_velocity(2.0), max_angular_velocity(5.0) {}
+      : name(name_), kp_linear(8.0), kp_angular(2.8), kp_angular_small(0.7),
+        tolerance(0.5), max_linear_velocity(2.0), max_angular_velocity(6.0) {}
 
   void send_cmd_vel(double v, double w) {
     geometry_msgs::Twist target_velocity;

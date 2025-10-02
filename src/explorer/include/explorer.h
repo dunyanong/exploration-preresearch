@@ -50,8 +50,6 @@ private:
     bool map_received;
     
     ros::Publisher goal_pub;
-    ros::Publisher frontier_marker_pub;
-    ros::Publisher cluster_marker_pub;
     
     int min_frontier_size;
     double max_exploration_distance;

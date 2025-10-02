@@ -6,7 +6,7 @@ Explorer::Explorer(ros::NodeHandle nh_) : nh_(nh_), map_received(false), has_cur
     // Create some parameters
     nh_.param("min_frontier_size", min_frontier_size, 5);
     nh_.param("max_exploration_distance", max_exploration_distance, 5.0);
-    nh_.param("frontier_search_radius", frontier_search_radius, 1.0);
+    nh_.param("frontier_search_radius", frontier_search_radius, 0.8);
     nh_.param("stuck_timeout", stuck_timeout, 20.0);
 
     last_progress_time = ros::Time::now();
@@ -15,8 +15,6 @@ Explorer::Explorer(ros::NodeHandle nh_) : nh_(nh_), map_received(false), has_cur
     map_sub = nh_.subscribe("/agv_map", 1, &Explorer::mapCallback, this);
 
     goal_pub = nh_.advertise<geometry_msgs::PoseStamped>("/move_base_simple/goal", 1);
-    frontier_marker_pub = nh_.advertise<visualization_msgs::MarkerArray>("/frontier_markers", 1);
-    cluster_marker_pub = nh_.advertise<visualization_msgs::MarkerArray>("/cluster_markers", 1);
 
 }
 
@@ -78,8 +76,6 @@ void Explorer::exploreStep() {
         return;
     }
 
-    publishFrontierMarkers(frontiers);
-
     std::vector<FrontierCluster> clusters = clusterFrontiers(frontiers);
     if (clusters.empty()) {
         ROS_INFO_THROTTLE(10.0, "No valid frontier clusters found.");
@@ -99,8 +95,6 @@ void Explorer::exploreStep() {
         return;
     }
     
-    publishClusterMarkers(accessible_clusters);
-
     FrontierCluster best_cluster = selectBestFrontier(accessible_clusters);
 
     // Check if we need to set a new goal
@@ -363,79 +357,45 @@ void Explorer::gridToWorld(const nav_msgs::OccupancyGrid& grid, int grid_x, int 
     world_y = grid.info.origin.position.y + (grid_y + 0.5) * grid.info.resolution;
 }
 
-void Explorer::publishFrontierMarkers(const std::vector<FrontierCell>& frontiers) {
-    visualization_msgs::MarkerArray marker_array;
-    visualization_msgs::Marker marker;
-    marker.header.frame_id = "map";
-    marker.header.stamp = ros::Time::now();
-    marker.ns = "frontiers";
-    marker.type = visualization_msgs::Marker::SPHERE_LIST;
-    marker.action = visualization_msgs::Marker::ADD;
-    marker.scale.x = 0.1;
-    marker.scale.y = 0.1;
-    marker.scale.z = 0.1;
-    marker.color.a = 1.0;
-    marker.color.r = 0.0;
-    marker.color.g = 1.0;
-    marker.color.b = 0.0;
-
-    for (const auto& frontier : frontiers) {
-        geometry_msgs::Point p;
-        p.x = frontier.world_x;
-        p.y = frontier.world_y;
-        p.z = 0.0;
-        marker.points.push_back(p);
-    }
-
-    marker.id = 0;
-    marker_array.markers.push_back(marker);
-    frontier_marker_pub.publish(marker_array);
-}
-
-void Explorer::publishClusterMarkers(const std::vector<FrontierCluster>& clusters) {
-    visualization_msgs::MarkerArray marker_array;
-    
-    for (size_t i = 0; i < clusters.size(); i++) {
-        visualization_msgs::Marker marker;
-        marker.header.frame_id = "map";
-        marker.header.stamp = ros::Time::now();
-        marker.ns = "clusters";
-        marker.id = i;
-        marker.type = visualization_msgs::Marker::SPHERE;
-        marker.action = visualization_msgs::Marker::ADD;
-        
-        marker.pose.position = clusters[i].centroid;
-        marker.pose.orientation.w = 1.0;
-        
-        marker.scale.x = 0.3;
-        marker.scale.y = 0.3;
-        marker.scale.z = 0.3;
-        
-        marker.color.r = 1.0;
-        marker.color.g = 0.0;
-        marker.color.b = 0.0;
-        marker.color.a = 0.8;
-        
-        marker_array.markers.push_back(marker);
-    }
-    
-    cluster_marker_pub.publish(marker_array);
-}
-
 FrontierCluster Explorer::selectBestFrontier(const std::vector<FrontierCluster>& clusters) {
     FrontierCluster best_cluster;
-    double min_distance = std::numeric_limits<double>::max();
-    
+    double best_cost = std::numeric_limits<double>::max();
+    const double w_dist = 0.5; 
+    const double w_energy = 1.0;
+    const double w_info = 3.5;
+
     for (const auto& cluster : clusters) {
         if (cluster.distance_to_robot > max_exploration_distance) {
             continue;
         }
+
+        // Travel Distance Cost: normalized path length
+        double Cdist = cluster.distance_to_robot / max_exploration_distance;
+
         
-        if (cluster.distance_to_robot < min_distance) {
-            min_distance = cluster.distance_to_robot;
+        // Expected Information Gain: using natural log of cluster size as a proxy
+        double I_gain = std::log(static_cast<double>(cluster.size));
+        
+        // Total cost: lower value is preferred
+        double cost = w_dist * Cdist + w_energy * cluster.distance_to_robot - w_info * I_gain;
+
+        // Map boundary penalty: discourage clusters near map boundaries
+        double map_min_x = map.info.origin.position.x;
+        double map_max_x = map_min_x + map.info.width * map.info.resolution;
+        double map_min_y = map.info.origin.position.y;
+        double map_max_y = map_min_y + map.info.height * map.info.resolution;
+        double boundary_margin = 1.0; // meters
+        if (cluster.centroid.x < map_min_x + boundary_margin ||
+            cluster.centroid.x > map_max_x - boundary_margin ||
+            cluster.centroid.y < map_min_y + boundary_margin ||
+            cluster.centroid.y > map_max_y - boundary_margin) {
+            cost += 100.0; // high penalty
+        }
+
+        if (cost < best_cost) {
+            best_cost = cost;
             best_cluster = cluster;
         }
     }
-    
     return best_cluster;
 }
