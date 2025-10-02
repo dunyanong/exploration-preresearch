@@ -4,8 +4,8 @@ Explorer::Explorer(ros::NodeHandle nh_) : nh_(nh_), map_received(false), has_cur
     srand(time(NULL));
     
     // Create some parameters
-    nh_.param("min_frontier_size", min_frontier_size, 5);
-    nh_.param("max_exploration_distance", max_exploration_distance, 5.0);
+    nh_.param("min_frontier_size", min_frontier_size, 2);
+    nh_.param("max_exploration_distance", max_exploration_distance, 3.0);
     nh_.param("frontier_search_radius", frontier_search_radius, 0.8);
     nh_.param("stuck_timeout", stuck_timeout, 20.0);
 

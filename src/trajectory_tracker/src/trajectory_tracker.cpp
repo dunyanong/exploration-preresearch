@@ -79,6 +79,9 @@ void TrajectoryTracker::odom_callback(const nav_msgs::Odometry::ConstPtr &msg,
   if (distance < r.tolerance &&
       idx < static_cast<int>(r.current_path.poses.size()) - 1) {
     r.current_index++;
+    // 重置积分误差当切换到新waypoint时
+    r.integral_linear_error = 0.0;
+    r.integral_angular_error = 0.0;
     idx = r.current_index;
     dx = r.current_path.poses[idx].pose.position.x - r.current_pose.position.x;
     dy = r.current_path.poses[idx].pose.position.y - r.current_pose.position.y;
@@ -86,7 +89,8 @@ void TrajectoryTracker::odom_callback(const nav_msgs::Odometry::ConstPtr &msg,
   } else if (distance < r.tolerance &&
              idx == static_cast<int>(r.current_path.poses.size()) - 1) {
     //r.send_cmd_vel(0, 0);
-    
+    r.integral_linear_error = 0.0;
+    r.integral_angular_error = 0.0;
     return;
   }
 
@@ -106,19 +110,31 @@ void TrajectoryTracker::odom_callback(const nav_msgs::Odometry::ConstPtr &msg,
   while (error_angle < -M_PI)
     error_angle += 2 * M_PI;
 
-  // 计算线速度角速度
+  // 更新积分误差
+  r.integral_linear_error += distance * 0.1; // 假设控制周期为0.1s
+  r.integral_angular_error += error_angle * 0.1;
+  
+  // 限制积分累积防止积分饱和
+  double max_integral = 2.0;
+  if (r.integral_linear_error > max_integral) r.integral_linear_error = max_integral;
+  if (r.integral_linear_error < -max_integral) r.integral_linear_error = -max_integral;
+  if (r.integral_angular_error > max_integral) r.integral_angular_error = max_integral;
+  if (r.integral_angular_error < -max_integral) r.integral_angular_error = -max_integral;
+
+  // 计算PI控制器输出
   double linear_vel, angular_vel;
   if (fabs(error_angle) >= M_PI / 6) {
-    linear_vel = r.kp_linear * distance;
-    angular_vel = r.kp_angular * error_angle;
+    linear_vel = r.kp_linear * distance + r.ki_linear * r.integral_linear_error;
+    angular_vel = r.kp_angular * error_angle + r.ki_angular * r.integral_angular_error;
   } else {
-    linear_vel = r.kp_linear * distance;
-    angular_vel = r.kp_angular_small * error_angle;
+    linear_vel = r.kp_linear * distance + r.ki_linear * r.integral_linear_error;
+    angular_vel = r.kp_angular_small * error_angle + r.ki_angular * r.integral_angular_error;
   }
 
-  // 当角度误差过大时停止线性运动
+  // 当角度误差过大时停止线性运动并重置积分项
   if (fabs(error_angle) >= M_PI / 2) {
     linear_vel = 0;
+    r.integral_linear_error = 0; // 重置积分项
   }
 
 
@@ -137,8 +153,10 @@ void TrajectoryTracker::odom_callback(const nav_msgs::Odometry::ConstPtr &msg,
 void TrajectoryTracker::path_callback(const nav_msgs::Path::ConstPtr &msg,
                                       const std::string &name) {
   Vehicle &r = vehicles[name];
-  // 清除旧path
+  // 清除旧path和重置积分误差
   r.current_path.poses.clear();
+  r.integral_linear_error = 0.0;
+  r.integral_angular_error = 0.0;
 
   // 空path处理
   if (msg->poses.empty()) {
