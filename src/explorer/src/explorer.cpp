@@ -333,7 +333,7 @@ bool Explorer::isFrontierCell(const nav_msgs::OccupancyGrid& grid, int x, int y)
 bool Explorer::isFree(const nav_msgs::OccupancyGrid& grid, int x, int y) {
     if (!isValidCell(grid, x, y)) return false;
     int idx = y * grid.info.width + x;
-    return grid.data[idx] >= 0 && grid.data[idx] < 50; // huh? need to double check i feel like this is wrong 
+    return grid.data[idx] >= 0 && grid.data[idx] < 50;
 }
 
 bool Explorer::isUnknown(const nav_msgs::OccupancyGrid& grid, int x, int y) {
@@ -345,7 +345,7 @@ bool Explorer::isUnknown(const nav_msgs::OccupancyGrid& grid, int x, int y) {
 bool Explorer::isOccupied(const nav_msgs::OccupancyGrid& grid, int x, int y) {
     if (!isValidCell(grid, x, y)) return false;
     int idx = y * grid.info.width + x;
-    return grid.data[idx] >= 50; // huh? need to double check i feel like this is wrong 
+    return grid.data[idx] >= 50;
 }
 
 bool Explorer::isValidCell(const nav_msgs::OccupancyGrid& grid, int x, int y) {

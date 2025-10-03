@@ -1,55 +1,28 @@
-# Exploration Test
+# Autonomous Exploration Simulation
 
-Hi all! Welcome to the exploration test. Your task is to develop an exploration algorithm using the provided framework.
+A ROS-based autonomous exploration system implementing the frontier-based exploration algorithm from Yamauchi, B., "A frontier-based approach for autonomous exploration", IEEE CIRA, 1997.
 
-All development must be done in **ROS1 Noetic**. Please ensure that your environment is properly set up for ROS Noetic before proceeding.
+## Overview
 
-## Objective
+This package provides a complete simulation environment for testing autonomous exploration algorithms. The robot autonomously navigates and maps unknown environments by identifying and moving towards frontier points (boundaries between known free space and unknown space).
 
-You are required to develop an efficient exploration package named **`explorer`** that enables a single robot to fully explore an unknown environment.
+## Features
 
+- **Frontier-based exploration**: Implements the classic Yamauchi algorithm
+- **ROS Integration**: Full ROS ecosystem compatibility
+- **Simulation Ready**: Works with Gazebo and other ROS simulators
+- **Goal Publishing**: Seamless integration with navigation stack
 
-## Basic Knowledge of ROS
+## Topics
 
-You need to develop a ROS1 package, which is a self-contained unit in the Robot Operating System (ROS) that includes source code, configuration, and dependencies. In ROS, nodes, which are basic units to perform specific function, communicate by publishing and subscribing to topics, which are named channels carrying messages. A node advertises a topic when it sends messages, and subscribes to a topic to receive messages from other nodes. For example, this exploration package subscribes to the robot’s odometry (/agv1/odom) and map (/agv_map) topics to perceive the environment, and publishes target goals to /agv1/goal to command the robot’s movement. This pub-sub mechanism enables modular and flexible robot control.
+- **Goal publishing topic**: `/move_base_simple/goal`
 
-## Project Structure
+## Demo
 
-The repository is organized as follows. Each directory under `src` is a package in ROS.
+See the exploration algorithm in action:
 
-```
-.
-├── README.md
-└── src
-    ├── local_planner
-    ├── map_builder
-    ├── odom_manager
-    ├── path_finder
-    ├── pcd_publisher
-    ├── simulator
-    └── trajectory_tracker
-```
+**Demo Video**: https://www.youtube.com/watch?v=MhtYzAHmc9I
 
-You will implement your exploration algorithm as a package under
+## References
 
-```
-src/explorer/ # you need to make this directory by yourself.
-```
-
-## Interfaces
-
-The following ROS topics are available and may be useful for your implementation:
-
-* **Map topic**: `/agv_map`
-* **Odometry topic**: `/agv1/odom`
-* **Goal publishing topic**: `/agv1/goal`
-
-Make sure to correctly subscribe to and publish on these topics to interact with the system.
-
-## Performance Requirement
-
-Your algorithm must be **efficient enough to complete the full environment exploration within 3 minutes**.
-
----
-
-Good luck, and we look forward to seeing your solution!
+Yamauchi, B., "A frontier-based approach for autonomous exploration", IEEE CIRA, 1997.
