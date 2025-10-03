@@ -36,13 +36,20 @@ struct Vehicle {
   double kp_linear;        // 线性速度的P
   double kp_angular;       // 角速度的P
   double kp_angular_small; // 小角度时的P
+  double ki_linear;        // 线性速度的I
+  double ki_angular;       // 角速度的I
   double tolerance;
   double max_linear_velocity, max_angular_velocity;
+  
+  // integral error accumulation
+  double integral_linear_error;
+  double integral_angular_error;
 
   Vehicle() = default;
   Vehicle(const std::string &name_)
-      : name(name_), kp_linear(10.0), kp_angular(3.5), kp_angular_small(1.0),
-        tolerance(0.5), max_linear_velocity(0.7), max_angular_velocity(5.0) {}
+      : name(name_), kp_linear(5.0), kp_angular(8.0), kp_angular_small(3.0),
+        ki_linear(0.2), ki_angular(0.1), tolerance(0.3), max_linear_velocity(5.0), 
+        max_angular_velocity(6.0), integral_linear_error(0.0), integral_angular_error(0.0) {}
 
   void send_cmd_vel(double v, double w) {
     geometry_msgs::Twist target_velocity;

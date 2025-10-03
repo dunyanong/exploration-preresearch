@@ -246,6 +246,7 @@ PathFinder::generateCostmap(const nav_msgs::OccupancyGrid &original_map) {
               if (new_map.data[new_index] != 100 &&
                   new_map.data[new_index] == 0) {
                 new_map.data[new_index] = 75;
+
               }
             }
           }
