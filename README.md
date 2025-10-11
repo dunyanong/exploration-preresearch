@@ -9,6 +9,8 @@ This package provides a complete simulation environment for testing autonomous e
 ## Features
 
 - **Frontier-based exploration**: Implements the classic Yamauchi algorithm
+- **Objective fucntion**: Multiple configurable strategies for frontier selection
+- **Mode Switching**: Dynamic adaptation of exploration behavior
 - **ROS Integration**: Full ROS ecosystem compatibility
 - **Simulation Ready**: Works with Gazebo and other ROS simulators
 - **Goal Publishing**: Seamless integration with navigation stack
